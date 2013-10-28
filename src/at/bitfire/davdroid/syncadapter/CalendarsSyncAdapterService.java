@@ -10,6 +10,7 @@ package at.bitfire.davdroid.syncadapter;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
 
 import lombok.Synchronized;
 import net.fortuna.ical4j.data.ParserException;
@@ -73,7 +74,7 @@ public class CalendarsSyncAdapterService extends Service {
 
 				LocalCalendar[] calendars = LocalCalendar.findAll(account, provider);
 				for (LocalCalendar calendar : calendars) {
-					URI uri = new URI(accountManager.getUserData(account, Constants.ACCOUNT_KEY_BASE_URL)).resolve(calendar.getPath());
+					URI uri = new URI(accountManager.getUserData(account, Constants.ACCOUNT_KEY_BASE_URL)).resolve(URLEncoder.encode(calendar.getPath(), "UTF-8"));
 					RemoteCollection dav = new CalDavCalendar(uri.toString(),
 						accountManager.getUserData(account, Constants.ACCOUNT_KEY_USERNAME),
 						accountManager.getPassword(account),

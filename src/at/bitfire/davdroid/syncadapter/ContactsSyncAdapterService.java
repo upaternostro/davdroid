@@ -10,6 +10,7 @@ package at.bitfire.davdroid.syncadapter;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
 
 import lombok.Synchronized;
 import net.fortuna.ical4j.data.ParserException;
@@ -69,7 +70,7 @@ public class ContactsSyncAdapterService extends Service {
 				return;
 			
 			try {
-				URI uri = new URI(accountManager.getUserData(account, Constants.ACCOUNT_KEY_BASE_URL)).resolve(addressBookPath);
+				URI uri = new URI(accountManager.getUserData(account, Constants.ACCOUNT_KEY_BASE_URL)).resolve(URLEncoder.encode(addressBookPath, "UTF-8"));
 				
 				RemoteCollection dav = new CardDavAddressBook(
 					uri.toString(),
@@ -84,25 +85,25 @@ public class ContactsSyncAdapterService extends Service {
 				
 			} catch (IOException e) {
 				syncResult.stats.numIoExceptions++;
-				Log.e(TAG, e.toString());
+				Log.e(TAG, e.toString(), e);
 			} catch (ParserException e) {
 				syncResult.stats.numParseExceptions++;
-				Log.e(TAG, e.toString());
+				Log.e(TAG, e.toString(), e);
 			} catch (HttpException e) {
 				syncResult.stats.numParseExceptions++;
-				Log.e(TAG, e.toString());
+				Log.e(TAG, e.toString(), e);
 			} catch (IncapableResourceException e) {
 				syncResult.stats.numParseExceptions++;
-				Log.e(TAG, e.toString());
+				Log.e(TAG, e.toString(), e);
 			} catch(RemoteException e) {
 				syncResult.databaseError = true;
-				Log.e(TAG, e.toString());
+				Log.e(TAG, e.toString(), e);
 			} catch(OperationApplicationException e) {
 				syncResult.databaseError = true;
-				Log.e(TAG, e.toString());
+				Log.e(TAG, e.toString(), e);
 			} catch (URISyntaxException e) {
 				syncResult.stats.numIoExceptions++;
-				Log.e(TAG, e.toString());
+				Log.e(TAG, e.toString(), e);
 			}
 		}
 	}
