@@ -30,7 +30,6 @@ import org.simpleframework.xml.Serializer;
 import org.simpleframework.xml.core.Persister;
 
 import android.util.Log;
-import at.bitfire.davdroid.resource.IncapableResourceException;
 
 public class WebDavCollection extends WebDavResource {
 	private static final String TAG = "davdroid.WebDavCollection";
@@ -40,11 +39,11 @@ public class WebDavCollection extends WebDavResource {
 		CALENDAR
 	}
 	
-	/* list of resource members, null until filled by propfind() or multiGet() */
-	@Getter protected List<WebDavResource> members;
+	/* list of resource members, empty until filled by propfind() or multiGet() */
+	@Getter protected List<WebDavResource> members = new LinkedList<WebDavResource>();
 
 	
-	public WebDavCollection(URI baseURL, String username, String password, boolean preemptiveAuth) throws IOException {
+	public WebDavCollection(URI baseURL, String username, String password, boolean preemptiveAuth) {
 		super(baseURL, username, password, preemptiveAuth);
 	}
 	
@@ -59,8 +58,7 @@ public class WebDavCollection extends WebDavResource {
 
 	/* collection operations */
 
-
-	public boolean propfind(HttpPropfind.Mode mode) throws IOException, IncapableResourceException, HttpException {
+	public boolean propfind(HttpPropfind.Mode mode) throws IOException, InvalidDavResponseException, HttpException {
 		HttpPropfind propfind = new HttpPropfind(location, mode);
 		HttpResponse response = client.execute(propfind);
 		checkResponse(response);
@@ -74,9 +72,9 @@ public class WebDavCollection extends WebDavResource {
 				multistatus = serializer.read(DavMultistatus.class, is, false);
 				
 				Log.d(TAG, "Received multistatus response: " + baos.toString("UTF-8"));
-			} catch (Exception e) {
-				Log.w(TAG, e);
-				throw new IncapableResourceException();
+			} catch (Exception ex) {
+				Log.w(TAG, "Invalid PROPFIND XML response", ex);
+				throw new InvalidDavResponseException();
 			}
 			processMultiStatus(multistatus);
 			return true;
@@ -85,7 +83,7 @@ public class WebDavCollection extends WebDavResource {
 			return false;
 	}
 	
-	public boolean multiGet(String[] names, MultigetType type) throws IOException, IncapableResourceException, HttpException {
+	public boolean multiGet(String[] names, MultigetType type) throws IOException, InvalidDavResponseException, HttpException {
 		DavMultiget multiget = (type == MultigetType.ADDRESS_BOOK) ? new DavAddressbookMultiget() : new DavCalendarMultiget(); 
 			
 		multiget.prop = new DavProp();
@@ -128,7 +126,7 @@ public class WebDavCollection extends WebDavResource {
 			processMultiStatus(multistatus);
 			
 		} else
-			throw new IncapableResourceException();
+			throw new InvalidDavResponseException();
 		return true;
 	}
 	
@@ -151,35 +149,37 @@ public class WebDavCollection extends WebDavResource {
 	/* HTTP support */
 	
 	protected void processMultiStatus(DavMultistatus multistatus) throws HttpException {
-		List<WebDavResource> members = new LinkedList<WebDavResource>();
-		
 		if (multistatus.response == null)	// empty response
 			return;
 		
+		// member list will be built from response
+		members.clear();
+		
 		for (DavResponse singleResponse : multistatus.response) {
-			String href = singleResponse.getHref().href;
+			URI href;
+			try {
+				href = location.resolve(singleResponse.getHref().href);
+			} catch(IllegalArgumentException ex) {
+				Log.w(TAG, "Ignoring illegal member URI in multi-status response", ex);
+				continue;
+			}
+			
+			// about which resource is this response?
+			WebDavResource referenced = null;
+			if (sameURL(location, href)) {	// -> ourselves
+				referenced = this;
+				
+			} else {						// -> about a member
+				referenced = new WebDavResource(this, href);
+				members.add(referenced);
+			}
 			
 			for (DavPropstat singlePropstat : singleResponse.getPropstat()) {
 				StatusLine status = BasicLineParser.parseStatusLine(singlePropstat.status, new BasicLineParser());
 				
-				try {
-					checkResponse(status);
-				} catch(NotFoundException e) {
+				// ignore information about missing properties etc.
+				if (status.getStatusCode()/100 != 1 && status.getStatusCode()/100 != 2)
 					continue;
-				}
-				
-				WebDavResource referenced = null;
-			
-				if (sameURL(location, location.resolve(href))) {
-					// response is about this property
-					referenced = this;
-					
-				} else {
-					// response is about a member, add it
-					URI uri = location.resolve(href);
-					referenced = new WebDavResource(this, uri);
-					members.add(referenced);
-				}
 				
 				DavProp prop = singlePropstat.prop;
 
@@ -225,7 +225,6 @@ public class WebDavCollection extends WebDavResource {
 					referenced.content = new ByteArrayInputStream(prop.addressData.vcard.getBytes());
 			}
 		}
-		this.members = members;
 	}
 	
 	

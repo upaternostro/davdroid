@@ -51,8 +51,6 @@ public class SelectCollectionsFragment extends ListFragment {
 		
 		final ListView listView = getListView();
 		listView.setPadding(20, 30, 20, 30);
-	
-		// TODO setEmptyView
 		
 		View header = getActivity().getLayoutInflater().inflate(R.layout.select_collections_header, null);
 		listView.addHeaderView(header);
@@ -143,16 +141,20 @@ public class SelectCollectionsFragment extends ListFragment {
 			
 			if (!addressBooks.isEmpty()) {
 				userData.putString(Constants.ACCOUNT_KEY_ADDRESSBOOK_PATH, addressBooks.get(0).getPath());
+				ContentResolver.setIsSyncable(account, ContactsContract.AUTHORITY, 1);
 				ContentResolver.setSyncAutomatically(account, ContactsContract.AUTHORITY, true);
-			}
+			} else
+				ContentResolver.setIsSyncable(account, ContactsContract.AUTHORITY, 0);
 			
 			if (accountManager.addAccountExplicitly(account, serverInfo.getPassword(), userData)) {
 				// account created, now create calendars
 				if (!calendars.isEmpty()) {
 					for (ServerInfo.ResourceInfo calendar : calendars)
 						LocalCalendar.create(account, getActivity().getContentResolver(), calendar);
+					ContentResolver.setIsSyncable(account, CalendarContract.AUTHORITY, 1);
 					ContentResolver.setSyncAutomatically(account, CalendarContract.AUTHORITY, true);
-				}
+				} else
+					ContentResolver.setIsSyncable(account, CalendarContract.AUTHORITY, 0);
 				
 				getActivity().finish();				
 			} else

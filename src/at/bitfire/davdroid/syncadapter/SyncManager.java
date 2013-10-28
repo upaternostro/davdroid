@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
-import net.fortuna.ical4j.data.ParserException;
 import net.fortuna.ical4j.model.ValidationException;
 
 import org.apache.http.HttpException;
@@ -22,14 +21,14 @@ import android.content.OperationApplicationException;
 import android.content.SyncResult;
 import android.os.RemoteException;
 import android.util.Log;
-import at.bitfire.davdroid.resource.IncapableResourceException;
 import at.bitfire.davdroid.resource.LocalCollection;
 import at.bitfire.davdroid.resource.RemoteCollection;
 import at.bitfire.davdroid.resource.Resource;
 import at.bitfire.davdroid.webdav.PreconditionFailedException;
 
 public class SyncManager {
-	private static String TAG = "davdroid.SyncManager";
+	private static final String TAG = "davdroid.SyncManager";
+	private static final int MAX_UPDATES_BEFORE_COMMIT = 100;
 	
 	protected Account account;
 	protected AccountManager accountManager;
@@ -40,7 +39,7 @@ public class SyncManager {
 		this.accountManager = accountManager;
 	}
 
-	public void synchronize(LocalCollection local, RemoteCollection dav, boolean manualSync, SyncResult syncResult) throws RemoteException, OperationApplicationException, IOException, IncapableResourceException, HttpException, ParserException {
+	public void synchronize(LocalCollection local, RemoteCollection dav, boolean manualSync, SyncResult syncResult) throws RemoteException, OperationApplicationException, IOException, HttpException {
 		boolean fetchCollection = false;
 		
 		// PHASE 1: UPLOAD LOCALLY-CHANGED RESOURCES
@@ -50,7 +49,8 @@ public class SyncManager {
 			Log.i(TAG, "Remotely removing " + deletedResources.length + " deleted resource(s) (if not changed)");
 			for (Resource res : deletedResources) {
 				try {
-					dav.delete(res);
+					if (res.getName() != null)	// is this resource even present remotely?
+						dav.delete(res);
 				} catch(PreconditionFailedException e) {
 					Log.i(TAG, "Locally-deleted resource has been changed on the server in the meanwhile");
 				}
@@ -134,28 +134,33 @@ public class SyncManager {
 		
 		// PHASE 3: DOWNLOAD NEW/REMOTELY-CHANGED RESOURCES
 		Log.i(TAG, "Adding " + resourcesToAdd.size() + " remote resource(s)");
-		if (!resourcesToAdd.isEmpty())
+		if (!resourcesToAdd.isEmpty()) {
 			for (Resource res : dav.multiGet(resourcesToAdd.toArray(new Resource[0]))) {
 				Log.i(TAG, "Adding " + res.getName());
 				try {
 					local.add(res);
-				} catch (ValidationException e) {
-					Log.e(TAG, "Invalid resource: " + res.getName());
+				} catch (ValidationException ex) {
+					Log.w(TAG, "Ignoring invalid remote resource: " + res.getName(), ex);
 				}
-				syncResult.stats.numInserts++;
+				
+				if (++syncResult.stats.numInserts % MAX_UPDATES_BEFORE_COMMIT == 0)	// avoid TransactionTooLargeException
+					local.commit();
 			}
-		local.commit();
+			local.commit();
+		}
 		
 		Log.i(TAG, "Updating " + resourcesToUpdate.size() + " remote resource(s)");
 		if (!resourcesToUpdate.isEmpty())
 			for (Resource res : dav.multiGet(resourcesToUpdate.toArray(new Resource[0]))) {
+				Log.i(TAG, "Updating " + res.getName());
 				try {
 					local.updateByRemoteName(res);
-				} catch (ValidationException e) {
-					Log.e(TAG, "Invalid resource: " + res.getName());
+				} catch (ValidationException ex) {
+					Log.e(TAG, "Ignoring invalid remote resource: " + res.getName(), ex);
 				}
-				Log.i(TAG, "Updating " + res.getName());
-				syncResult.stats.numInserts++;
+				
+				if (++syncResult.stats.numUpdates % MAX_UPDATES_BEFORE_COMMIT == 0)	// avoid TransactionTooLargeException
+					local.commit();
 			}
 		local.commit();
 

@@ -60,6 +60,7 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 	protected String entryColumnAccountType()	{ return RawContacts.ACCOUNT_TYPE; }
 	protected String entryColumnAccountName()	{ return RawContacts.ACCOUNT_NAME; }
 	
+	protected String entryColumnParentID()		{ return null;	/* maybe use RawContacts.DATA_SET some day? */ }
 	protected String entryColumnID()			{ return RawContacts._ID; }
 	protected String entryColumnRemoteName()	{ return RawContacts.SOURCE_ID; }
 	protected String entryColumnETag()			{ return RawContacts.SYNC2; }
@@ -78,6 +79,11 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 	
 	
 	/* collection operations */
+	
+	@Override
+	public long getId() {
+		return -1;
+	}
 	
 	@Override
 	public String getCTag() {
@@ -105,9 +111,10 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 		Cursor cursor = providerClient.query(entriesURI(),
 				new String[] { RawContacts._ID, entryColumnRemoteName(), entryColumnETag() },
 				entryColumnRemoteName() + "=?", new String[] { remoteName }, null);
-		if (cursor.moveToNext())
+		if (cursor != null && cursor.moveToNext())
 			return new Contact(cursor.getLong(0), cursor.getString(1), cursor.getString(2));
-		return null;
+		else
+			return null;
 	}
 
 	@Override
@@ -118,18 +125,19 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 		
 		Cursor cursor = providerClient.query(ContentUris.withAppendedId(entriesURI(), c.getLocalID()),
 			new String[] { entryColumnUID(), RawContacts.STARRED }, null, null, null);
-		if (cursor.moveToNext()) {
+		if (cursor != null && cursor.moveToNext()) {
 			c.setUid(cursor.getString(0));
 			c.setStarred(cursor.getInt(1) != 0);
 		}
 		
 		// structured name
 		cursor = providerClient.query(dataURI(), new String[] {
-				StructuredName.DISPLAY_NAME, StructuredName.PREFIX, StructuredName.GIVEN_NAME,
-				StructuredName.MIDDLE_NAME,	StructuredName.FAMILY_NAME, StructuredName.SUFFIX
+				/* 0 */ StructuredName.DISPLAY_NAME, StructuredName.PREFIX, StructuredName.GIVEN_NAME,
+				/* 3 */ StructuredName.MIDDLE_NAME,	StructuredName.FAMILY_NAME, StructuredName.SUFFIX,
+				/* 6 */ StructuredName.PHONETIC_GIVEN_NAME, StructuredName.PHONETIC_MIDDLE_NAME, StructuredName.PHONETIC_FAMILY_NAME
 			}, StructuredName.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
 			new String[] { String.valueOf(res.getLocalID()), StructuredName.CONTENT_ITEM_TYPE }, null);
-		if (cursor.moveToNext()) {
+		if (cursor != null && cursor.moveToNext()) {
 			c.setDisplayName(cursor.getString(0));
 			
 			c.setPrefix(cursor.getString(1));
@@ -137,6 +145,10 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 			c.setMiddleName(cursor.getString(3));
 			c.setFamilyName(cursor.getString(4));
 			c.setSuffix(cursor.getString(5));
+			
+			c.setPhoneticGivenName(cursor.getString(6));
+			c.setPhoneticMiddleName(cursor.getString(7));
+			c.setPhoneticFamilyName(cursor.getString(8));
 		}
 		
 		// nick names
@@ -144,7 +156,7 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 				Nickname.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
 				new String[] { String.valueOf(c.getLocalID()), Nickname.CONTENT_ITEM_TYPE }, null);
 		List<String> nickNames = new LinkedList<String>();
-		while (cursor.moveToNext())
+		while (cursor != null && cursor.moveToNext())
 			nickNames.add(cursor.getString(0));
 		if (!nickNames.isEmpty())
 			c.setNickNames(nickNames.toArray(new String[0]));
@@ -153,7 +165,7 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 		cursor = providerClient.query(dataURI(), new String[] { Email.TYPE, Email.ADDRESS },
 				Email.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
 				new String[] { String.valueOf(c.getLocalID()), Email.CONTENT_ITEM_TYPE }, null);
-		while (cursor.moveToNext()) {
+		while (cursor != null && cursor.moveToNext()) {
 			net.fortuna.ical4j.vcard.property.Email email = new net.fortuna.ical4j.vcard.property.Email(cursor.getString(1));
 			switch (cursor.getInt(0)) {
 			case Email.TYPE_HOME:
@@ -170,7 +182,7 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 		cursor = providerClient.query(dataURI(), new String[] { Phone.TYPE, Phone.NUMBER },
 				Phone.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
 				new String[] { String.valueOf(c.getLocalID()), Phone.CONTENT_ITEM_TYPE }, null);
-		while (cursor.moveToNext()) {
+		while (cursor != null && cursor.moveToNext()) {
 			Telephone number = new Telephone(cursor.getString(1));
 			List<String> types = new LinkedList<String>();
 			
@@ -215,14 +227,14 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 		cursor = providerClient.query(dataURI(), new String[] { Photo.PHOTO },
 			Photo.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
 			new String[] { String.valueOf(c.getLocalID()), Photo.CONTENT_ITEM_TYPE }, null);
-		if (cursor.moveToNext())
+		if (cursor != null && cursor.moveToNext())
 			c.setPhoto(cursor.getBlob(0));
 		
 		// events (birthday)
 		cursor = providerClient.query(dataURI(), new String[] { CommonDataKinds.Event.TYPE, CommonDataKinds.Event.START_DATE },
 				Photo.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
 				new String[] { String.valueOf(c.getLocalID()), CommonDataKinds.Event.CONTENT_ITEM_TYPE }, null);
-		while (cursor.moveToNext())
+		while (cursor != null && cursor.moveToNext())
 			try {
 				switch (cursor.getInt(0)) {
 				case CommonDataKinds.Event.TYPE_BIRTHDAY:
@@ -237,7 +249,7 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 		cursor = providerClient.query(dataURI(), new String[] { Website.URL },
 				Website.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
 				new String[] { String.valueOf(c.getLocalID()), Website.CONTENT_ITEM_TYPE }, null);
-		while (cursor.moveToNext())
+		while (cursor != null && cursor.moveToNext())
 			try {
 				c.addURL(new URI(cursor.getString(0)));
 			} catch (URISyntaxException ex) {
@@ -248,7 +260,7 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 		cursor = providerClient.query(dataURI(), new String[] { Note.NOTE },
 				Website.RAW_CONTACT_ID + "=? AND " + Data.MIMETYPE + "=?",
 				new String[] { String.valueOf(c.getLocalID()), Note.CONTENT_ITEM_TYPE }, null);
-		while (cursor.moveToNext())
+		while (cursor != null && cursor.moveToNext())
 			c.addNote(new String(cursor.getString(0)));
 		
 		c.populated = true;
@@ -347,7 +359,10 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 			.withValue(StructuredName.GIVEN_NAME, contact.getGivenName())
 			.withValue(StructuredName.MIDDLE_NAME, contact.getMiddleName())
 			.withValue(StructuredName.FAMILY_NAME, contact.getFamilyName())
-			.withValue(StructuredName.SUFFIX, contact.getSuffix());
+			.withValue(StructuredName.SUFFIX, contact.getSuffix())
+			.withValue(StructuredName.PHONETIC_GIVEN_NAME, contact.getPhoneticGivenName())
+			.withValue(StructuredName.PHONETIC_MIDDLE_NAME, contact.getPhoneticMiddleName())
+			.withValue(StructuredName.PHONETIC_FAMILY_NAME, contact.getPhoneticFamilyName());
 	}
 	
 	protected Builder buildNickName(Builder builder, String nickName) {

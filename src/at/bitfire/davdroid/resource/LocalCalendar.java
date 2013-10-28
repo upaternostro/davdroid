@@ -31,6 +31,7 @@ import org.apache.commons.lang.StringUtils;
 
 import android.accounts.Account;
 import android.annotation.SuppressLint;
+import android.annotation.TargetApi;
 import android.content.ContentProviderClient;
 import android.content.ContentProviderOperation;
 import android.content.ContentProviderOperation.Builder;
@@ -40,6 +41,7 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.DatabaseUtils;
 import android.net.Uri;
+import android.os.Build;
 import android.os.RemoteException;
 import android.provider.CalendarContract;
 import android.provider.CalendarContract.Attendees;
@@ -52,7 +54,7 @@ import at.bitfire.davdroid.syncadapter.ServerInfo;
 public class LocalCalendar extends LocalCollection<Event> {
 	private static final String TAG = "davdroid.LocalCalendar";
 
-	protected long id;
+	@Getter protected long id;
 	@Getter protected String path, cTag;
 	
 	protected static String COLLECTION_COLUMN_CTAG = Calendars.CAL_SYNC1;
@@ -68,6 +70,7 @@ public class LocalCalendar extends LocalCollection<Event> {
 	protected String entryColumnAccountType()	{ return Events.ACCOUNT_TYPE; }
 	protected String entryColumnAccountName()	{ return Events.ACCOUNT_NAME; }
 	
+	protected String entryColumnParentID()		{ return Events.CALENDAR_ID; }
 	protected String entryColumnID()			{ return Events._ID; }
 	protected String entryColumnRemoteName()	{ return Events._SYNC_ID; }
 	protected String entryColumnETag()			{ return Events.SYNC_DATA1; }
@@ -75,9 +78,9 @@ public class LocalCalendar extends LocalCollection<Event> {
 	protected String entryColumnDirty()			{ return Events.DIRTY; }
 	protected String entryColumnDeleted()		{ return Events.DELETED; }
 	
-	@SuppressLint("InlinedApi")
+	@TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
 	protected String entryColumnUID() {
-		return (android.os.Build.VERSION.SDK_INT >= 17) ?
+		return (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) ?
 			Events.UID_2445 : Events.SYNC_DATA2;
 	}
 
@@ -108,8 +111,9 @@ public class LocalCalendar extends LocalCollection<Event> {
 		Cursor cursor = providerClient.query(calendarsURI(account),
 				new String[] { Calendars._ID, Calendars.NAME, COLLECTION_COLUMN_CTAG },
 				Calendars.DELETED + "=0 AND " + Calendars.SYNC_EVENTS + "=1", null, null);
+		
 		LinkedList<LocalCalendar> calendars = new LinkedList<LocalCalendar>();
-		while (cursor.moveToNext())
+		while (cursor != null && cursor.moveToNext())
 			calendars.add(new LocalCalendar(account, providerClient, cursor.getInt(0), cursor.getString(1), cursor.getString(2)));
 		return calendars.toArray(new LocalCalendar[0]);
 	}
@@ -148,9 +152,10 @@ public class LocalCalendar extends LocalCollection<Event> {
 				new String[] { entryColumnID(), entryColumnRemoteName(), entryColumnETag() },
 				Events.CALENDAR_ID + "=? AND " + entryColumnRemoteName() + "=?",
 				new String[] { String.valueOf(id), remoteName }, null);
-		if (cursor.moveToNext())
+		if (cursor != null && cursor.moveToNext())
 			return new Event(cursor.getLong(0), cursor.getString(1), cursor.getString(2));
-		return null;
+		else
+			return null;
 	}
 
 	@Override
@@ -168,7 +173,7 @@ public class LocalCalendar extends LocalCollection<Event> {
 				/* 14 */ Events.HAS_ATTENDEE_DATA, Events.ORGANIZER, Events.SELF_ATTENDEE_STATUS,
 				/* 17 */ entryColumnUID()
 			}, null, null, null);
-		if (cursor.moveToNext()) {
+		if (cursor != null && cursor.moveToNext()) {
 			e.setUid(cursor.getString(17));
 			
 			e.setSummary(cursor.getString(0));
@@ -251,7 +256,7 @@ public class LocalCalendar extends LocalCollection<Event> {
 						/* 0 */ Attendees.ATTENDEE_EMAIL, Attendees.ATTENDEE_NAME, Attendees.ATTENDEE_TYPE,
 						/* 3 */ Attendees.ATTENDEE_RELATIONSHIP, Attendees.STATUS
 					}, Attendees.EVENT_ID + "=?", new String[] { String.valueOf(e.getLocalID()) }, null);
-				while (c.moveToNext()) {
+				while (c != null && c.moveToNext()) {
 					try {
 						Attendee attendee = new Attendee("mailto:" + c.getString(0));
 						ParameterList params = attendee.getParameters();
