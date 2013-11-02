@@ -246,7 +246,7 @@ public class LocalCalendar extends LocalCollection<Event> {
 				try {
 					e.setOrganizer(new Organizer("mailto:" + cursor.getString(15)));
 				} catch (URISyntaxException ex) {
-					Log.e(TAG, "Error parsing organizer email address, ignoring");
+					Log.e(TAG, "Error parsing organizer URI, ignoring");
 				}
 				
 				Uri attendeesUri = Attendees.CONTENT_URI.buildUpon()
@@ -330,15 +330,15 @@ public class LocalCalendar extends LocalCollection<Event> {
 		String where;
 		
 		if (remoteResources.length != 0) {
-			List<String> terms = new LinkedList<String>();
+			List<String> sqlFileNames = new LinkedList<String>();
 			for (Resource res : remoteResources)
-				terms.add(entryColumnRemoteName() + "<>" + DatabaseUtils.sqlEscapeString(res.getName()));
-			where = StringUtils.join(terms, " AND ");
+				sqlFileNames.add(DatabaseUtils.sqlEscapeString(res.getName()));
+			where = entryColumnRemoteName() + " NOT IN (" + StringUtils.join(sqlFileNames, ",") + ")";
 		} else
 			where = entryColumnRemoteName() + " IS NOT NULL";
-			
+		
 		Builder builder = ContentProviderOperation.newDelete(entriesURI())
-				.withSelection(Events.CALENDAR_ID + "=? AND (" + where + ")", new String[] { String.valueOf(id) });
+				.withSelection(entryColumnParentID() + "=? AND (" + where + ")", new String[] { String.valueOf(id) });
 		pendingOperations.add(builder
 				.withYieldAllowed(true)
 				.build());

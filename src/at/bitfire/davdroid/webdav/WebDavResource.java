@@ -10,6 +10,7 @@ package at.bitfire.davdroid.webdav;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,12 +32,14 @@ import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpOptions;
 import org.apache.http.client.methods.HttpPut;
+import org.apache.http.client.params.ClientPNames;
 import org.apache.http.entity.ByteArrayEntity;
-import org.apache.http.impl.EnglishReasonPhraseCatalog;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.params.CoreProtocolPNames;
 
 import android.util.Log;
+import at.bitfire.davdroid.Constants;
+import at.bitfire.davdroid.Utils;
 
 
 @ToString
@@ -64,21 +67,30 @@ public class WebDavResource {
 	protected DefaultHttpClient client;
 	
 	
-	public WebDavResource(URI baseURL, String username, String password, boolean preemptive) {
+	public WebDavResource(URI baseURL, String username, String password, boolean preemptive, boolean isCollection) throws URISyntaxException {
 		location = baseURL.normalize();
 		
+		if (isCollection && !location.getPath().endsWith("/"))
+			location = new URI(location.getScheme(), location.getSchemeSpecificPart() + "/", null);
+		
+		// create new HTTP client
 		client = new DefaultHttpClient();
+		client.getParams().setParameter(CoreProtocolPNames.USER_AGENT, "DAVdroid/" + Constants.APP_VERSION);
+		
+		// authenticate
 		client.getCredentialsProvider().setCredentials(new AuthScope(location.getHost(), location.getPort()),
 				new UsernamePasswordCredentials(username, password));
-		
 		// preemptive auth is available for Basic auth only
 		if (preemptive) {
 			Log.i(TAG, "Using preemptive Basic Authentication");
 			client.addRequestInterceptor(new PreemptiveAuthInterceptor(), 0);
 		}
 		
-		client.getParams().setParameter(CoreProtocolPNames.USER_AGENT, "DAVdroid");
+		// allow gzip compression
 		GzipDecompressingEntity.enable(client);
+		
+		// redirections
+		client.getParams().setBooleanParameter(ClientPNames.HANDLE_REDIRECTS, false);
 	}
 
 	protected WebDavResource(WebDavCollection parent, URI uri) {
@@ -87,14 +99,13 @@ public class WebDavResource {
 	}
 	
 	public WebDavResource(WebDavCollection parent, String member) {
-		location = parent.location.resolve(member);
+		location = Utils.resolveURI(parent.location, member);
 		client = parent.client;
 	}
 	
 	public WebDavResource(WebDavCollection parent, String member, String ETag) {
-		location = parent.location.resolve(member);
+		this(parent, member);
 		properties.put(Property.ETAG, ETag);
-		client = parent.client;
 	}
 	
 	protected void checkResponse(HttpResponse response) throws HttpException {
@@ -104,13 +115,10 @@ public class WebDavResource {
 	protected void checkResponse(StatusLine statusLine) throws HttpException {
 		int code = statusLine.getStatusCode();
 		
-		if (code/100 == 1 || code/100 == 2)
+		if (code/100 == 1 || code/100 == 2)		// everything OK
 			return;
 		
-		// handle known codes
-		EnglishReasonPhraseCatalog catalog = EnglishReasonPhraseCatalog.INSTANCE;
-		String reason = catalog.getReason(code, null);
-		
+		String reason = code + " " + statusLine.getReasonPhrase();
 		switch (code) {
 		case HttpStatus.SC_UNAUTHORIZED:
 			throw new AuthenticationException(reason);
@@ -132,12 +140,14 @@ public class WebDavResource {
 		checkResponse(response);
 
 		Header[] allowHeaders = response.getHeaders("Allow");
-		for (Header allowHeader : allowHeaders)
-			methods.addAll(Arrays.asList(allowHeader.getValue().split(", ?")));
+		if (allowHeaders != null)
+			for (Header allowHeader : allowHeaders)
+				methods.addAll(Arrays.asList(allowHeader.getValue().split(", ?")));
 
 		Header[] capHeaders = response.getHeaders("DAV");
-		for (Header capHeader : capHeaders)
-			capabilities.addAll(Arrays.asList(capHeader.getValue().split(", ?")));
+		if (capHeaders != null)
+			for (Header capHeader : capHeaders)
+				capabilities.addAll(Arrays.asList(capHeader.getValue().split(", ?")));
 	}
 
 	public boolean supportsDAV(String capability) {
@@ -155,7 +165,7 @@ public class WebDavResource {
 		String[] names = StringUtils.split(location.getPath(), "/");
 		return names[names.length - 1];
 	}
-
+	
 	
 	/* property methods */
 	
