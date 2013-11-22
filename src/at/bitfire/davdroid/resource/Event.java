@@ -9,6 +9,7 @@ package at.bitfire.davdroid.resource;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
@@ -30,6 +31,7 @@ import net.fortuna.ical4j.model.PropertyList;
 import net.fortuna.ical4j.model.TimeZoneRegistry;
 import net.fortuna.ical4j.model.ValidationException;
 import net.fortuna.ical4j.model.component.VEvent;
+import net.fortuna.ical4j.model.component.VTimeZone;
 import net.fortuna.ical4j.model.parameter.Value;
 import net.fortuna.ical4j.model.property.Attendee;
 import net.fortuna.ical4j.model.property.Clazz;
@@ -148,8 +150,8 @@ public class Event extends Resource {
 	@Override
 	public String toEntity() {
 		net.fortuna.ical4j.model.Calendar ical = new net.fortuna.ical4j.model.Calendar();
-		ical.getProperties().add(new ProdId("-//bitfire web engineering//DAVdroid " + Constants.APP_VERSION + "//EN"));
 		ical.getProperties().add(Version.VERSION_2_0);
+		ical.getProperties().add(new ProdId("-//bitfire web engineering//DAVdroid " + Constants.APP_VERSION + "//EN"));
 		
 		VEvent event = new VEvent();
 		PropertyList props = event.getProperties();
@@ -305,5 +307,18 @@ public class Event extends Resource {
 		
 		if (dtStart == null)
 			throw new ValidationException("dtStart must not be empty");
+	}
+
+
+	public static String TimezoneDefToTzId(String timezoneDef) {
+		try {
+			CalendarBuilder builder = new CalendarBuilder();
+			net.fortuna.ical4j.model.Calendar cal = builder.build(new StringReader(timezoneDef));
+			VTimeZone timezone = (VTimeZone)cal.getComponent(VTimeZone.VTIMEZONE);
+			return timezone.getTimeZoneId().getValue();
+		} catch (Exception ex) {
+			Log.w(TAG, "Can't understand time zone definition", ex);
+		}
+		return null;
 	}
 }

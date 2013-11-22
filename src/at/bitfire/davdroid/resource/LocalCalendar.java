@@ -11,6 +11,8 @@ import java.net.URISyntaxException;
 import java.text.ParseException;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import lombok.Getter;
 import net.fortuna.ical4j.model.Parameter;
@@ -91,13 +93,16 @@ public class LocalCalendar extends LocalCollection<Event> {
 	public static void create(Account account, ContentResolver resolver, ServerInfo.ResourceInfo info) throws RemoteException {
 		ContentProviderClient client = resolver.acquireContentProviderClient(CalendarContract.AUTHORITY);
 		
-		int color = 0xFFC3EA6E;
-		if (info.getColor() != null)
-			try {
-				color = Integer.decode(info.getColor());
-			} catch(Exception ex) {
-				Log.w(TAG, "Couldn't parse calendar color " + info.getColor());
+		int color = 0xFFC3EA6E;		// fallback: "DAVdroid green"
+		if (info.getColor() != null) {
+			Pattern p = Pattern.compile("#(\\p{XDigit}{6})(\\p{XDigit}{2})?");
+			Matcher m = p.matcher(info.getColor());
+			if (m.find()) {
+				int color_rgb = Integer.parseInt(m.group(1), 16);
+				int color_alpha = m.group(2) != null ? (Integer.parseInt(m.group(2), 16) & 0xFF) : 0xFF;
+				color = (color_alpha << 24) | color_rgb;
 			}
+		}
 		
 		ContentValues values = new ContentValues();
 		values.put(Calendars.ACCOUNT_NAME, account.name);
@@ -111,6 +116,10 @@ public class LocalCalendar extends LocalCollection<Event> {
 		values.put(Calendars.OWNER_ACCOUNT, account.name);
 		values.put(Calendars.SYNC_EVENTS, 1);
 		values.put(Calendars.VISIBLE, 1);
+		
+		if (info.getTimezone() != null)
+			values.put(Calendars.CALENDAR_TIME_ZONE, info.getTimezone());
+		
 		Log.i(TAG, "Inserting calendar: " + values.toString() + " -> " + calendarsURI(account).toString());
 		client.insert(calendarsURI(account), values);
 	}
