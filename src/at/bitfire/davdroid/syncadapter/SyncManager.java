@@ -24,6 +24,7 @@ import android.util.Log;
 import at.bitfire.davdroid.resource.LocalCollection;
 import at.bitfire.davdroid.resource.RemoteCollection;
 import at.bitfire.davdroid.resource.Resource;
+import at.bitfire.davdroid.webdav.NotFoundException;
 import at.bitfire.davdroid.webdav.PreconditionFailedException;
 
 public class SyncManager {
@@ -39,7 +40,7 @@ public class SyncManager {
 		this.accountManager = accountManager;
 	}
 
-	public void synchronize(LocalCollection local, RemoteCollection dav, boolean manualSync, SyncResult syncResult) throws RemoteException, OperationApplicationException, IOException, HttpException {
+	public void synchronize(LocalCollection<? extends Resource> local, RemoteCollection<? extends Resource> dav, boolean manualSync, SyncResult syncResult) throws RemoteException, OperationApplicationException, IOException, HttpException {
 		boolean fetchCollection = false;
 		
 		// PHASE 1: UPLOAD LOCALLY-CHANGED RESOURCES
@@ -51,6 +52,8 @@ public class SyncManager {
 				try {
 					if (res.getName() != null)	// is this resource even present remotely?
 						dav.delete(res);
+				} catch(NotFoundException e) {
+					Log.i(TAG, "Locally-deleted resource has already been removed from server");
 				} catch(PreconditionFailedException e) {
 					Log.i(TAG, "Locally-deleted resource has been changed on the server in the meanwhile");
 				}
@@ -125,7 +128,7 @@ public class SyncManager {
 			return;
 		
 		for (Resource remoteResource : remoteResources) {
-			Resource localResource = local.findByRemoteName(remoteResource.getName());
+			Resource localResource = local.findByRemoteName(remoteResource.getName(), true);
 			if (localResource == null)
 				resourcesToAdd.add(remoteResource);
 			else if (localResource.getETag() == null || !localResource.getETag().equals(remoteResource.getETag()))
@@ -137,11 +140,7 @@ public class SyncManager {
 		if (!resourcesToAdd.isEmpty()) {
 			for (Resource res : dav.multiGet(resourcesToAdd.toArray(new Resource[0]))) {
 				Log.i(TAG, "Adding " + res.getName());
-				try {
-					local.add(res);
-				} catch (ValidationException ex) {
-					Log.w(TAG, "Ignoring invalid remote resource: " + res.getName(), ex);
-				}
+				local.add(res);
 				
 				if (++syncResult.stats.numInserts % MAX_UPDATES_BEFORE_COMMIT == 0)	// avoid TransactionTooLargeException
 					local.commit();

@@ -49,13 +49,13 @@ public class CalendarsSyncAdapterService extends Service {
 		}
 		
 		@Override
-		protected Map<LocalCollection, RemoteCollection> getSyncPairs(Account account, ContentProviderClient provider) {
+		protected Map<LocalCollection<?>, RemoteCollection<?>> getSyncPairs(Account account, ContentProviderClient provider) {
 			try {
-				Map<LocalCollection, RemoteCollection> map = new HashMap<LocalCollection, RemoteCollection>();
+				Map<LocalCollection<?>, RemoteCollection<?>> map = new HashMap<LocalCollection<?>, RemoteCollection<?>>();
 				
 				for (LocalCalendar calendar : LocalCalendar.findAll(account, provider)) {
 					URI uri = new URI(accountManager.getUserData(account, Constants.ACCOUNT_KEY_BASE_URL)).resolve(calendar.getPath().replaceAll(" ", "%20"));
-					RemoteCollection dav = new CalDavCalendar(uri.toString(),
+					RemoteCollection<?> dav = new CalDavCalendar(uri.toString(),
 						accountManager.getUserData(account, Constants.ACCOUNT_KEY_USERNAME),
 						accountManager.getPassword(account),
 						Boolean.parseBoolean(accountManager.getUserData(account, Constants.ACCOUNT_KEY_AUTH_PREEMPTIVE)));

@@ -48,22 +48,22 @@ public class ContactsSyncAdapterService extends Service {
 		}
 
 		@Override
-		protected Map<LocalCollection, RemoteCollection> getSyncPairs(Account account, ContentProviderClient provider) {
+		protected Map<LocalCollection<?>, RemoteCollection<?>> getSyncPairs(Account account, ContentProviderClient provider) {
 			String addressBookPath = accountManager.getUserData(account, Constants.ACCOUNT_KEY_ADDRESSBOOK_PATH);
 			if (addressBookPath == null)
 				return null;
 			
 			try {
-				LocalCollection database = new LocalAddressBook(account, provider, accountManager);
+				LocalCollection<?> database = new LocalAddressBook(account, provider, accountManager);
 				
 				URI uri = new URI(accountManager.getUserData(account, Constants.ACCOUNT_KEY_BASE_URL)).resolve(addressBookPath.replaceAll(" ", "%20"));
-				RemoteCollection dav = new CardDavAddressBook(
+				RemoteCollection<?> dav = new CardDavAddressBook(
 					uri.toString(),
 					accountManager.getUserData(account, Constants.ACCOUNT_KEY_USERNAME),
 					accountManager.getPassword(account),
 					Boolean.parseBoolean(accountManager.getUserData(account, Constants.ACCOUNT_KEY_AUTH_PREEMPTIVE)));
 				
-				Map<LocalCollection, RemoteCollection> map = new HashMap<LocalCollection, RemoteCollection>();
+				Map<LocalCollection<?>, RemoteCollection<?>> map = new HashMap<LocalCollection<?>, RemoteCollection<?>>();
 				map.put(database, dav);
 				
 				return map;
