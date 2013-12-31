@@ -7,6 +7,7 @@
  ******************************************************************************/
 package at.bitfire.davdroid.resource;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -23,8 +24,6 @@ public abstract class Resource {
 	@Getter @Setter protected String uid;
 	@Getter protected long localID;
 	
-	@Getter protected boolean populated = false;
-	
 	
 	public Resource(String name, String ETag) {
 		this.name = name;
@@ -37,8 +36,8 @@ public abstract class Resource {
 	}
 	
 	// sets resource name and UID
-	public abstract void initialize();
+	public abstract void initRemoteFields();
 	
 	public abstract void parseEntity(InputStream entity) throws IOException, ParserException, VCardException;
-	public abstract String toEntity() throws IOException, ValidationException;
+	public abstract ByteArrayOutputStream toEntity() throws IOException, ValidationException;
 }

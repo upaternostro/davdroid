@@ -7,6 +7,7 @@
  ******************************************************************************/
 package at.bitfire.davdroid.resource;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
@@ -20,6 +21,7 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
 import net.fortuna.ical4j.data.CalendarBuilder;
+import net.fortuna.ical4j.data.CalendarOutputter;
 import net.fortuna.ical4j.data.ParserException;
 import net.fortuna.ical4j.model.Component;
 import net.fortuna.ical4j.model.ComponentList;
@@ -29,6 +31,7 @@ import net.fortuna.ical4j.model.DefaultTimeZoneRegistryFactory;
 import net.fortuna.ical4j.model.Property;
 import net.fortuna.ical4j.model.PropertyList;
 import net.fortuna.ical4j.model.TimeZoneRegistry;
+import net.fortuna.ical4j.model.ValidationException;
 import net.fortuna.ical4j.model.component.VAlarm;
 import net.fortuna.ical4j.model.component.VEvent;
 import net.fortuna.ical4j.model.component.VTimeZone;
@@ -62,7 +65,7 @@ import at.bitfire.davdroid.syncadapter.DavSyncAdapter;
 public class Event extends Resource {
 	private final static String TAG = "davdroid.Event";
 	
-	private TimeZoneRegistry tzRegistry;
+	private TimeZoneRegistry tzRegistry = new DefaultTimeZoneRegistryFactory().createRegistry();
 	
 	@Getter @Setter private String summary, location, description;
 	
@@ -93,18 +96,14 @@ public class Event extends Resource {
 
 	public Event(String name, String ETag) {
 		super(name, ETag);
-		
-		DefaultTimeZoneRegistryFactory factory = new DefaultTimeZoneRegistryFactory();
-		tzRegistry = factory.createRegistry();
 	}
 	
 	public Event(long localID, String name, String ETag) {
-		this(name, ETag);
-		this.localID = localID;
+		super(localID, name, ETag);
 	}
 	
 	@Override
-	public void initialize() {
+	public void initRemoteFields() {
 		uid = DavSyncAdapter.generateUID();
 		name = uid.replace("@", "_") + ".ics";
 	}
@@ -122,7 +121,7 @@ public class Event extends Resource {
 		ComponentList events = ical.getComponents(Component.VEVENT);
 		if (events == null || events.isEmpty())
 			return;
-		VEvent event = (VEvent)events.get(0); 
+		VEvent event = (VEvent)events.get(0);
 		
 		if (event.getUid() != null)
 			uid = event.getUid().getValue();
@@ -170,7 +169,7 @@ public class Event extends Resource {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public String toEntity() {
+	public ByteArrayOutputStream toEntity() throws IOException, ValidationException {
 		net.fortuna.ical4j.model.Calendar ical = new net.fortuna.ical4j.model.Calendar();
 		ical.getProperties().add(Version.VERSION_2_0);
 		ical.getProperties().add(new ProdId("-//bitfire web engineering//DAVdroid " + Constants.APP_VERSION + "//EN"));
@@ -196,11 +195,11 @@ public class Event extends Resource {
 		if (exdate != null)
 			props.add(exdate);
 		
-		if (summary != null)
+		if (summary != null && !summary.isEmpty())
 			props.add(new Summary(summary));
-		if (location != null)
+		if (location != null && !location.isEmpty())
 			props.add(new Location(location));
-		if (description != null)
+		if (description != null && !description.isEmpty())
 			props.add(new Description(description));
 		
 		if (status != null)
@@ -228,8 +227,11 @@ public class Event extends Resource {
 			ical.getComponents().add(tzStart.getVTimeZone());
 		if (tzEnd != null && tzEnd != tzStart)
 			ical.getComponents().add(tzEnd.getVTimeZone());
-			
-		return ical.toString();
+
+		CalendarOutputter output = new CalendarOutputter(false);
+		ByteArrayOutputStream os = new ByteArrayOutputStream();
+		output.output(ical, os);
+		return os;
 	}
 
 	
