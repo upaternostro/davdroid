@@ -234,7 +234,12 @@ public class LocalAddressBook extends LocalCollection<Contact> {
 				email.addType(Contact.EMAIL_TYPE_MOBILE);
 				break;
 			case Email.TYPE_CUSTOM:
-				email.addType(EmailType.get(labelToXName(cursor.getString(2))));
+				String xname = labelToXName(cursor.getString(2));
+				
+				if (xname == null) {
+					continue;
+				}
+				email.addType(EmailType.get(xname));
 				break;
 			}
 			c.getEmails().add(email);
