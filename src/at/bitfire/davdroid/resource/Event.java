@@ -1,9 +1,12 @@
 /*******************************************************************************
- * Copyright (c) 2013 Richard Hirner (bitfire web engineering).
+ * Copyright (c) 2014 Richard Hirner (bitfire web engineering).
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the GNU Public License v3.0
  * which accompanies this distribution, and is available at
  * http://www.gnu.org/licenses/gpl.html
+ * 
+ * Contributors:
+ *     Richard Hirner (bitfire web engineering) - initial API and implementation
  ******************************************************************************/
 package at.bitfire.davdroid.resource;
 
@@ -56,6 +59,8 @@ import net.fortuna.ical4j.model.property.Summary;
 import net.fortuna.ical4j.model.property.Transp;
 import net.fortuna.ical4j.model.property.Uid;
 import net.fortuna.ical4j.model.property.Version;
+import net.fortuna.ical4j.util.SimpleHostInfo;
+import net.fortuna.ical4j.util.UidGenerator;
 import android.text.format.Time;
 import android.util.Log;
 import at.bitfire.davdroid.Constants;
@@ -65,7 +70,7 @@ import at.bitfire.davdroid.syncadapter.DavSyncAdapter;
 public class Event extends Resource {
 	private final static String TAG = "davdroid.Event";
 	
-	private TimeZoneRegistry tzRegistry = new DefaultTimeZoneRegistryFactory().createRegistry();
+	private final static TimeZoneRegistry tzRegistry = new DefaultTimeZoneRegistryFactory().createRegistry();
 	
 	@Getter @Setter private String summary, location, description;
 	
@@ -101,10 +106,16 @@ public class Event extends Resource {
 	public Event(long localID, String name, String ETag) {
 		super(localID, name, ETag);
 	}
+
 	
 	@Override
-	public void initRemoteFields() {
-		uid = DavSyncAdapter.generateUID();
+	public void generateUID() {
+		UidGenerator generator = new UidGenerator(new SimpleHostInfo(DavSyncAdapter.getAndroidID()), String.valueOf(android.os.Process.myPid()));
+		uid = generator.generateUid().getValue();
+	}
+	
+	@Override
+	public void generateName() {
 		name = uid.replace("@", "_") + ".ics";
 	}
 
@@ -127,7 +138,7 @@ public class Event extends Resource {
 			uid = event.getUid().getValue();
 		else {
 			Log.w(TAG, "Received VEVENT without UID, generating new one");
-			uid = DavSyncAdapter.generateUID();
+			generateUID();
 		}
 		
 		dtStart = event.getStartDate();	validateTimeZone(dtStart);
@@ -299,13 +310,13 @@ public class Event extends Resource {
 		return false;
 	}
 
-	protected boolean hasNoTime(DateProperty date) {
+	protected static boolean hasNoTime(DateProperty date) {
 		if (date == null)
 			return false;
 		return !(date.getDate() instanceof DateTime);
 	}
 
-	String getTzId(DateProperty date) {
+	protected static String getTzId(DateProperty date) {
 		if (date == null)
 			return null;
 		
@@ -319,7 +330,7 @@ public class Event extends Resource {
 	}
 
 	/* guess matching Android timezone ID */
-	protected void validateTimeZone(DateProperty date) {
+	protected static void validateTimeZone(DateProperty date) {
 		if (date == null || date.isUtc() || hasNoTime(date))
 			return;
 		

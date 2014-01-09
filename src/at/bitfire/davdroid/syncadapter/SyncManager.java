@@ -31,12 +31,21 @@ public class SyncManager {
 	
 	private static final int MAX_MULTIGET_RESOURCES = 35;
 	
+	protected LocalCollection<? extends Resource> local;
+	protected RemoteCollection<? extends Resource> remote;
+	
+	
+	public SyncManager(LocalCollection<? extends Resource> local, RemoteCollection<? extends Resource> remote) {
+		this.local = local;
+		this.remote = remote;
+	}
 
-	public void synchronize(LocalCollection<? extends Resource> local, RemoteCollection<? extends Resource> remote, boolean manualSync, SyncResult syncResult) throws LocalStorageException, IOException, HttpException {
+	
+	public void synchronize(boolean manualSync, SyncResult syncResult) throws LocalStorageException, IOException, HttpException {
 		// PHASE 1: push local changes to server
-		int	deletedRemotely = pushDeleted(local, remote),
-			addedRemotely = pushNew(local, remote),
-			updatedRemotely = pushDirty(local, remote);
+		int	deletedRemotely = pushDeleted(),
+			addedRemotely = pushNew(),
+			updatedRemotely = pushDirty();
 		
 		syncResult.stats.numEntries = deletedRemotely + addedRemotely + updatedRemotely;
 		
@@ -59,21 +68,19 @@ public class SyncManager {
 						remotelyUpdated = new HashSet<Resource>();
 		
 		Resource[] remoteResources = remote.getMemberETags();
-		if (remoteResources != null) {
-			for (Resource remoteResource : remoteResources) {
-				try {
-					Resource localResource = local.findByRemoteName(remoteResource.getName(), false);
-					if (localResource.getETag() == null || !localResource.getETag().equals(remoteResource.getETag()))
-						remotelyUpdated.add(remoteResource);
-				} catch(RecordNotFoundException e) {
-					remotelyAdded.add(remoteResource);
-				}
+		for (Resource remoteResource : remoteResources) {
+			try {
+				Resource localResource = local.findByRemoteName(remoteResource.getName(), false);
+				if (!remoteResource.getETag().equals(localResource.getETag()))
+					remotelyUpdated.add(remoteResource);
+			} catch(RecordNotFoundException e) {
+				remotelyAdded.add(remoteResource);
 			}
 		}
 		
 		// PHASE 3: pull remote changes from server
-		syncResult.stats.numInserts = pullNew(local, remote, remotelyAdded.toArray(new Resource[0]));
-		syncResult.stats.numUpdates = pullChanged(local, remote, remotelyUpdated.toArray(new Resource[0]));
+		syncResult.stats.numInserts = pullNew(remotelyAdded.toArray(new Resource[0]));
+		syncResult.stats.numUpdates = pullChanged(remotelyUpdated.toArray(new Resource[0]));
 		syncResult.stats.numEntries += syncResult.stats.numInserts + syncResult.stats.numUpdates;
 		
 		Log.i(TAG, "Removing non-dirty resources that are not present remotely anymore");
@@ -87,7 +94,7 @@ public class SyncManager {
 	}
 	
 	
-	private int pushDeleted(LocalCollection<? extends Resource> local, RemoteCollection<? extends Resource> remote) throws LocalStorageException, IOException, HttpException {
+	private int pushDeleted() throws LocalStorageException, IOException, HttpException {
 		int count = 0;
 		long[] deletedIDs = local.findDeleted();
 		
@@ -113,7 +120,7 @@ public class SyncManager {
 		return count;
 	}
 	
-	private int pushNew(LocalCollection<? extends Resource> local, RemoteCollection<? extends Resource> remote) throws LocalStorageException, IOException, HttpException {
+	private int pushNew() throws LocalStorageException, IOException, HttpException {
 		int count = 0;
 		long[] newIDs = local.findNew();
 		Log.i(TAG, "Uploading " + newIDs.length + " new resource(s) (if not existing)");
@@ -137,9 +144,9 @@ public class SyncManager {
 		return count;
 	}
 	
-	private int pushDirty(LocalCollection<? extends Resource> local, RemoteCollection<? extends Resource> remote) throws LocalStorageException, IOException, HttpException {
+	private int pushDirty() throws LocalStorageException, IOException, HttpException {
 		int count = 0;
-		long[] dirtyIDs = local.findDirty();
+		long[] dirtyIDs = local.findUpdated();
 		Log.i(TAG, "Uploading " + dirtyIDs.length + " modified resource(s) (if not changed)");
 		try {
 			for (long id : dirtyIDs) {
@@ -162,36 +169,30 @@ public class SyncManager {
 		return count;
 	}
 	
-	private int pullNew(LocalCollection<? extends Resource> local, RemoteCollection<? extends Resource> remote, Resource[] resourcesToAdd) throws LocalStorageException, IOException, HttpException {
+	private int pullNew(Resource[] resourcesToAdd) throws LocalStorageException, IOException, HttpException {
 		int count = 0;
 		Log.i(TAG, "Fetching " + resourcesToAdd.length + " new remote resource(s)");
 		
 		for (Resource[] resources : ArrayUtils.partition(resourcesToAdd, MAX_MULTIGET_RESOURCES))
-			try {
-				for (Resource res : remote.multiGet(resources)) {
-					Log.d(TAG, "Adding " + res.getName());
-					local.add(res);
-					count++;
-				}
-			} finally {
+			for (Resource res : remote.multiGet(resources)) {
+				Log.d(TAG, "Adding " + res.getName());
+				local.add(res);
 				local.commit();
+				count++;
 			}
 		return count;
 	}
 	
-	private int pullChanged(LocalCollection<? extends Resource> local, RemoteCollection<? extends Resource> remote, Resource[] resourcesToUpdate) throws LocalStorageException, IOException, HttpException {
+	private int pullChanged(Resource[] resourcesToUpdate) throws LocalStorageException, IOException, HttpException {
 		int count = 0;
 		Log.i(TAG, "Fetching " + resourcesToUpdate.length + " updated remote resource(s)");
 		
 		for (Resource[] resources : ArrayUtils.partition(resourcesToUpdate, MAX_MULTIGET_RESOURCES))
-			try {
-				for (Resource res : remote.multiGet(resources)) {
-					Log.i(TAG, "Updating " + res.getName());
-					local.updateByRemoteName(res);
-					count++;
-				}
-			} finally {
+			for (Resource res : remote.multiGet(resources)) {
+				Log.i(TAG, "Updating " + res.getName());
+				local.updateByRemoteName(res);
 				local.commit();
+				count++;
 			}
 		return count;
 	}

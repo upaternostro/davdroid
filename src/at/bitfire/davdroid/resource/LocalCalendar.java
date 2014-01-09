@@ -1,9 +1,12 @@
 /*******************************************************************************
- * Copyright (c) 2013 Richard Hirner (bitfire web engineering).
+ * Copyright (c) 2014 Richard Hirner (bitfire web engineering).
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the GNU Public License v3.0
  * which accompanies this distribution, and is available at
  * http://www.gnu.org/licenses/gpl.html
+ * 
+ * Contributors:
+ *     Richard Hirner (bitfire web engineering) - initial API and implementation
  ******************************************************************************/
 package at.bitfire.davdroid.resource;
 
@@ -92,7 +95,7 @@ public class LocalCalendar extends LocalCollection<Event> {
 	
 	@TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
 	protected String entryColumnUID() {
-		return (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) ?
+		return (android.os.Build.VERSION.SDK_INT >= 17) ?
 			Events.UID_2445 : Events.SYNC_DATA2;
 	}
 
@@ -121,14 +124,17 @@ public class LocalCalendar extends LocalCollection<Event> {
 		values.put(Calendars.CALENDAR_DISPLAY_NAME, info.getTitle());
 		values.put(Calendars.CALENDAR_COLOR, color);
 		values.put(Calendars.CALENDAR_ACCESS_LEVEL, Calendars.CAL_ACCESS_OWNER);
-		values.put(Calendars.ALLOWED_AVAILABILITY, Events.AVAILABILITY_BUSY + "," + Events.AVAILABILITY_FREE + "," + Events.AVAILABILITY_TENTATIVE);
-		values.put(Calendars.ALLOWED_ATTENDEE_TYPES, Attendees.TYPE_NONE + "," + Attendees.TYPE_OPTIONAL + "," + Attendees.TYPE_REQUIRED + "," + Attendees.TYPE_RESOURCE);
 		values.put(Calendars.ALLOWED_REMINDERS, Reminders.METHOD_ALERT);
 		values.put(Calendars.CAN_ORGANIZER_RESPOND, 1);
 		values.put(Calendars.CAN_MODIFY_TIME_ZONE, 1);
 		values.put(Calendars.OWNER_ACCOUNT, account.name);
 		values.put(Calendars.SYNC_EVENTS, 1);
 		values.put(Calendars.VISIBLE, 1);
+		
+		if (android.os.Build.VERSION.SDK_INT >= 15) {
+			values.put(Calendars.ALLOWED_AVAILABILITY, Events.AVAILABILITY_BUSY + "," + Events.AVAILABILITY_FREE + "," + Events.AVAILABILITY_TENTATIVE);
+			values.put(Calendars.ALLOWED_ATTENDEE_TYPES, Attendees.TYPE_NONE + "," + Attendees.TYPE_OPTIONAL + "," + Attendees.TYPE_REQUIRED + "," + Attendees.TYPE_RESOURCE);
+		}
 		
 		if (info.getTimezone() != null)
 			values.put(Calendars.CALENDAR_TIME_ZONE, info.getTimezone());
@@ -235,29 +241,29 @@ public class LocalCalendar extends LocalCollection<Event> {
 				// recurrence
 				try {
 					String duration = cursor.getString(18);
-					if (duration != null && !duration.isEmpty())
+					if (!StringUtils.isEmpty(duration))
 						e.setDuration(new Duration(new Dur(duration)));
 					
 					String strRRule = cursor.getString(10);
-					if (strRRule != null && !strRRule.isEmpty())
+					if (!StringUtils.isEmpty(strRRule))
 						e.setRrule(new RRule(strRRule));
 					
 					String strRDate = cursor.getString(11);
-					if (strRDate != null && !strRDate.isEmpty()) {
+					if (!StringUtils.isEmpty(strRDate)) {
 						RDate rDate = new RDate();
 						rDate.setValue(strRDate);
 						e.setRdate(rDate);
 					}
 				
 					String strExRule = cursor.getString(12);
-					if (strExRule != null && !strExRule.isEmpty()) {
+					if (!StringUtils.isEmpty(strExRule)) {
 						ExRule exRule = new ExRule();
 						exRule.setValue(strExRule);
 						e.setExrule(exRule);
 					}
 					
 					String strExDate = cursor.getString(13);
-					if (strExDate != null && !strExDate.isEmpty()) {
+					if (!StringUtils.isEmpty(strExDate)) {
 						// ignored, see https://code.google.com/p/android/issues/detail?id=21426
 						ExDate exDate = new ExDate();
 						exDate.setValue(strExDate);
